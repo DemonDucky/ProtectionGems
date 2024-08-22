@@ -1,0 +1,4 @@
+name: ProtectionGems
+version: '1.0.0'
+main: me.demonducky.protectiongems.ProtectionGems
+api-version: '1.20'
