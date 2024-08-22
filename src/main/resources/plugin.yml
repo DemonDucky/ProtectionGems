@@ -1,4 +1,13 @@
 name: ProtectionGems
-version: '1.0.0'
+version: 1.0
 main: me.demonducky.protectiongems.ProtectionGems
-api-version: '1.20'
+api-version: 1.20
+commands:
+  protectiongem:
+    description: Quản lý Ngọc Bảo Vệ
+    usage: /<command> give <player> <amount>
+    permission: protectiongems.use
+permissions:
+  protectiongems.use:
+    description: Cho phép sử dụng lệnh protectiongem
+    default: op

@@ -1,0 +1,14 @@
+gem:
+  material: EMERALD
+  name: "&6&lNgọc Bảo Vệ"
+
+protection:
+  lore: "&6&lLượt bảo vệ: %amount%"
+  added_amount: 3
+
+messages:
+  usage: "Sử dụng: /protectiongem give <player> <amount>"
+  player_not_found: "Không tìm thấy người chơi %player%"
+  invalid_amount: "Số lượng không hợp lệ"
+  gem_given: "Đã cấp %amount% Ngọc Bảo Vệ cho %player%"
+  error: "Đã xảy ra lỗi khi thực hiện thao tác"
