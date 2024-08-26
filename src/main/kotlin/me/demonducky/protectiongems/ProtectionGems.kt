@@ -1,6 +1,8 @@
 package me.demonducky.protectiongems
 
+import me.demonducky.protectiongems.models.ItemHolder
 import org.bukkit.ChatColor
+import org.bukkit.GameMode
 import org.bukkit.Material
 import org.bukkit.command.Command
 import org.bukkit.command.CommandSender
@@ -36,7 +38,7 @@ class ProtectionGems : JavaPlugin(), Listener {
         server.pluginManager.registerEvents(this, this)
 
         // Register the command executor
-        getCommand("protectiongem")?.setExecutor(this)
+        getCommand("protectiongems")?.setExecutor(this)
 
         // Save the default configuration file
         saveDefaultConfig()
@@ -53,21 +55,22 @@ class ProtectionGems : JavaPlugin(), Listener {
 
     override fun onCommand(sender: CommandSender, command: Command, label: String, args: Array<out String>): Boolean {
         // Handle the protectiongem command
-        if (command.name.equals("protectiongem", ignoreCase = true)) {
-            return handleProtectionGemCommand(sender, args)
+        if (command.name.equals("protectiongems", ignoreCase = true)) {
+            handleProtectionGemCommand(sender, args)
         }
-        // Return false if the command is not handled
-        return false
+
+        return true
     }
 
-    private fun handleProtectionGemCommand(sender: CommandSender, args: Array<out String>): Boolean {
+
+    private fun handleProtectionGemCommand(sender: CommandSender, args: Array<out String>) {
         // Check if the command is valid
         if (args.size < 3 || args[0] != "give") {
             // Send a message with the usage
             sender.sendMessage(
-                customConfig.getString("messages.usage") ?: "Sử dụng: /protectiongem give <player> <amount>"
+                customConfig.getString("messages.usage") ?: "Sử dụng: /protectiongems give <player> <amount>"
             )
-            return true
+            return
         }
 
         // Get the player
@@ -78,7 +81,7 @@ class ProtectionGems : JavaPlugin(), Listener {
                 customConfig.getString("messages.player_not_found")?.replace("%player%", args[1])
                     ?: "Không tìm thấy người chơi ${args[1]}"
             )
-            return true
+            return
         }
 
         // Get the amount
@@ -86,7 +89,7 @@ class ProtectionGems : JavaPlugin(), Listener {
         if (amount == null || amount <= 0) {
             // Send a message with the invalid amount
             sender.sendMessage(customConfig.getString("messages.invalid_amount") ?: "Số lượng không hợp lệ")
-            return true
+            return
         }
 
         // Give the protection gem
@@ -103,7 +106,7 @@ class ProtectionGems : JavaPlugin(), Listener {
             // Send a message with the error
             sender.sendMessage(customConfig.getString("messages.error") ?: "Đã xảy ra lỗi khi cấp Ngọc Bảo Vệ")
         }
-        return true
+        return
     }
 
     private fun giveProtectionGem(player: Player, amount: Int) {
@@ -138,6 +141,12 @@ class ProtectionGems : JavaPlugin(), Listener {
 
         // Check if the cursor item is a protection gem, the current item is not null or air
         if (isProtectionGem(cursorItem) && currentItem != null && !currentItem.type.isAir) {
+            val player = event.whoClicked
+            if (player.gameMode == GameMode.CREATIVE) {
+                event.whoClicked.sendMessage(ChatColor.translateAlternateColorCodes('&', "&cKhông thể ép ngọc bảo vệ ở chế độ sáng tạo"))
+                event.isCancelled = true
+                return
+            }
             // Try to apply the protection gem
             try {
                 applyProtectionToItem(currentItem)
@@ -239,27 +248,28 @@ class ProtectionGems : JavaPlugin(), Listener {
         // Get the drops
         val drops = event.drops
         // Get the protected items
-        val protectedItems = mutableListOf<ItemStack>()
+        val protectedItems = mutableListOf<ItemHolder>()
 
         // Iterate through the drops and get the protected items
-        drops.iterator().forEach { item ->
+
+        drops.forEachIndexed { index, item ->
             if (hasProtection(item)) {
-                protectedItems.add(item)
+                protectedItems.add(ItemHolder(index, item))
             }
         }
 
         // Remove the protected items from the drops
-        drops.removeAll(protectedItems)
+        drops.removeAll(protectedItems.map { itemHolder -> itemHolder.item })
 
 
         // Iterate through the protected items and update the protection
 
-        saveProtectedItems(player.uniqueId, protectedItems.map { item ->
-            updateItemProtection(item)
+        saveProtectedItems(player.uniqueId, protectedItems.map { itemHolder ->
+            ItemHolder(itemHolder.index, updateItemProtection(itemHolder.item))
         })
 
 
-        player.inventory.removeItem(*protectedItems.toTypedArray())
+        player.inventory.removeItem(*protectedItems.map { itemHolder -> itemHolder.item }.toTypedArray())
     }
 
     @EventHandler
@@ -270,24 +280,28 @@ class ProtectionGems : JavaPlugin(), Listener {
         // Schedule a task to give items back after respawn
         server.scheduler.runTask(this, Runnable {
             for (item in protectedItems) {
-                val leftover = player.inventory.addItem(item)
-                if (leftover.isNotEmpty()) {
-                    // Drop items that didn't fit in the inventory
-                    player.world.dropItem(player.location, leftover.values.first())
-                }
+                player.inventory.setItem(item.index, item.item)
             }
             // Clear the saved items for this player
             clearProtectedItems(player.uniqueId)
         })
     }
 
-    private fun saveProtectedItems(playerUUID: UUID, items: List<ItemStack>) {
-        yamlConfig.set("protected-items.$playerUUID", items)
+    private fun saveProtectedItems(playerUUID: UUID, items: List<ItemHolder>) {
+        items.forEach { item ->
+            yamlConfig.set("protected-items.$playerUUID.${item.index}", item.item)
+        }
         yamlConfig.save(configFile)
     }
 
-    private fun getProtectedItems(playerUUID: UUID): List<ItemStack> {
-        return yamlConfig.getList("protected-items.$playerUUID") as? List<ItemStack> ?: emptyList()
+    private fun getProtectedItems(playerUUID: UUID): List<ItemHolder> {
+        val path = "protected-items.$playerUUID"
+        val section = yamlConfig.getConfigurationSection(path) ?: return emptyList()
+        val keys = section.getKeys(false)
+        return keys.map { key ->
+
+            ItemHolder(key.toInt(), yamlConfig.getItemStack("$path.$key") ?: ItemStack(Material.AIR))
+        }
     }
 
     private fun clearProtectedItems(playerUUID: UUID) {
